@@ -189,6 +189,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -208,6 +209,12 @@ type User struct {
 }
 
 func main() {
+	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -216,10 +223,19 @@ func main() {
 		w.Write([]byte("Hello World!"))
 	})
 
+	// Create table if not exists
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT)")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Initialize JWT auth
+	tokenAuth = jwtauth.New("HS256", jwtSecret, nil)
+
 	r.Post("/login", loginHandler)
 	r.Group(func(r chi.Router) {
 		r.Use(jwtauth.Verifier(tokenAuth))
-		r.Use(jwtauth.Authenticator)
+		// r.Use(jwtauth.Authenticator)
 
 		r.Get("/users", getUsers(db))
 		r.Get("/users/{id}", getUser(db))
@@ -303,8 +319,19 @@ func updateUser(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]string{"message":"user updated"})
+		json.NewEncoder(w).Encode(map[string]string{"message": "user updated"})
 	}
 }
 
+func deleteUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 
+		_, err := db.Exec("DELETE FROM users WHERE id= $1", id)
+		if err != nil {
+			http.Error(w, "Error deleting user", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"message": "user deleted"})
+	}
+}
