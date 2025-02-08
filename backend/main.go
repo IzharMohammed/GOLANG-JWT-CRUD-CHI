@@ -184,6 +184,7 @@ func deleteUser(db *sql.DB) http.HandlerFunc {
 } */
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -199,6 +200,12 @@ import (
 var jwtSecret = []byte("seCr3t")
 
 var tokenAuth *jwtauth.JWTAuth
+
+type User struct {
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
 
 func main() {
 	r := chi.NewRouter()
@@ -233,6 +240,38 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
 
-func getUsers()  {
-	
+func getUsers(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rows, err := db.Query("SELECT * FROM users")
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		users := []User{}
+		for rows.Next() {
+			var u User
+			if err := rows.Scan(&u.Id, &u.Name, &u.Email); err != nil {
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				return
+			}
+			users = append(users, u)
+		}
+		json.NewEncoder(w).Encode(users)
+	}
+}
+
+func getUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		var u User
+		err := db.QueryRow("SELECT * FROM users WHERE id=$1", id).Scan(&u.Id, &u.Name, &u.Email)
+		if err != nil {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(u)
+	}
 }
