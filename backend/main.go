@@ -290,3 +290,21 @@ func createUser(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(u)
 	}
 }
+
+func updateUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var u User
+		json.NewDecoder(r.Body).Decode(&u)
+
+		_, err := db.Exec("UPDATE users SET name=$1, email=$2 WHERE id = $3", u.Name, u.Email, id)
+		if err != nil {
+			http.Error(w, "Error updating user", http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]string{"message":"user updated"})
+	}
+}
+
+
